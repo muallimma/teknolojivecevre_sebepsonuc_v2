@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Teknoloji-Çevre Eşleştirme Oyunu</title>
+<style>
+    body { font-family: Arial, sans-serif; margin:0; background: linear-gradient(135deg,#e0f7fa,#ffe0b2); overflow:hidden; }
+    #gameContainer { width:100%; height:100vh; position:relative; overflow:hidden; }
+    .balloon {
+        position:absolute; width:120px; height:120px; border-radius:50%;
+        display:flex; justify-content:center; align-items:center; text-align:center;
+        cursor:pointer; color:white; font-weight:bold; user-select:none; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        transition: transform 0.2s, box-shadow 0.2s, border 0.2s;
+        border: 3px solid transparent;
+    }
+    .balloon.selected { box-shadow: 0 0 25px 5px #fff; transform: scale(1.2); border: 3px solid black; }
+    #uiPanel {
+        position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+        text-align:center; background:rgba(255,255,255,0.8); padding:30px; border-radius:15px;
+    }
+    #timer { font-size:2em; margin-bottom:20px; }
+    #startBtn, .actionBtn { padding:10px 20px; font-size:1em; margin:5px; cursor:pointer; border:none; border-radius:10px; background:#3498db; color:white; transition:0.3s;}
+    #startBtn:hover, .actionBtn:hover { background:#0277bd; }
+    #endPanel { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+        text-align:center; background:rgba(255,255,255,0.95); padding:30px; border-radius:15px; width:80%; max-width:600px; }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+    <div id="uiPanel">
+        <h1>🌍 Teknoloji ve Çevreyi Eşleştir!</h1>
+        <p>Teknolojik gelişmeler ile olumsuz çevresel etkilerini eşleştir. Her doğru eşleşme +50 puan.</p>
+        <button id="startBtn">Başla</button>
+    </div>
+    <div id="endPanel">
+        <h2>🎉 Oyun Bitti!</h2>
+        <p id="scoreText"></p>
+        <h3>Öğrendiğin Bilgiler:</h3>
+        <ul>
+            <li>Sanayileşme ve enerji üretimi → Sera gazları</li>
+            <li>Maden arama ve kentleşme → Ormansızlaşma</li>
+            <li>Büyük veri ve sunucular → Yüksek enerji tüketimi</li>
+            <li>Elektronik teknolojiler → E-Atıklar</li>
+            <li>Petrole dayalı plastik ürünler → Çevre felaketleri</li>
+            <li>Tarımda sentetik gübre → Toprak kirliliği</li>
+            <li>Hızlı üretim teknolojileri → Kaynak tüketiminde hızlanma</li>
+        </ul>
+    </div>
+</div>
+<script>
+const techs = [
+    {text:'Sanayileşme ve enerji üretimi', match:'Sera gazları'},
+    {text:'Maden arama ve kentleşme', match:'Ormansızlaşma'},
+    {text:'Büyük veri ve sunucular', match:'Yüksek enerji tüketimi'},
+    {text:'Elektronik teknolojiler', match:'E-Atıklar'},
+    {text:'Petrole dayalı plastik ürünler', match:'Çevre felaketleri'},
+    {text:'Tarımda sentetik gübre', match:'Toprak kirliliği'},
+    {text:'Hızlı üretim teknolojileri', match:'Kaynak tüketiminde hızlanma'}
+];
+const impacts = techs.map(t=>t.match);
+
+let balloons = [];
+let selectedBalloon = null;
+let score = 0;
+let timeLeft = 120; // süreyi 120 saniye yaptık
+let timerInterval;
+let gameStarted = false;
+let passCount = 0;
+let maxPass = 2;
+let crystalUsed = false;
+
+const container = document.getElementById('gameContainer');
+const uiPanel = document.getElementById('uiPanel');
+const endPanel = document.getElementById('endPanel');
+const scoreText = document.getElementById('scoreText');
+
+function createBalloons() {
+    balloons = [];
+    techs.forEach((t,i)=>{
+        let b = createBalloon(t.text,'tech',t.match,'#3498db');
+        balloons.push(b);
+        container.appendChild(b);
+    });
+    impacts.forEach((t,i)=>{
+        let b = createBalloon(t,'impact',t,'#f39c12');
+        balloons.push(b);
+        container.appendChild(b);
+    });
+}
+
+function createBalloon(text,type,match,color) {
+    let b = document.createElement('div');
+    b.className='balloon';
+    b.innerText=text;
+    b.style.background=color;
+    b.dataset.type=type;
+    b.dataset.match=match;
+    b.style.left=Math.random()*(window.innerWidth-140)+'px';
+    b.style.top=Math.random()*(window.innerHeight-140)+'px';
+    // hızı %30 düşürdük
+    b.vx=(Math.random()*2+1)*(type==='tech'?0.7:0.7);
+    b.vy=(Math.random()*2+1)*(type==='tech'?0.7:0.7);
+    b.addEventListener('click', ()=>selectBalloon(b));
+    return b;
+}
+
+function moveBalloons() {
+    balloons.forEach(b=>{
+        let x = parseFloat(b.style.left);
+        let y = parseFloat(b.style.top);
+        x+=b.vx; y+=b.vy;
+        if(x<0 || x>window.innerWidth-120) b.vx*=-1;
+        if(y<0 || y>window.innerHeight-120) b.vy*=-1;
+        b.style.left=x+'px';
+        b.style.top=y+'px';
+    });
+    if(gameStarted) requestAnimationFrame(moveBalloons);
+}
+
+function selectBalloon(b) {
+    if(selectedBalloon===b){ 
+        b.classList.remove('selected'); 
+        selectedBalloon=null;
+        return;
+    }
+    if(selectedBalloon && selectedBalloon.dataset.type!==b.dataset.type){
+        if(selectedBalloon.dataset.match===b.dataset.match){
+            score+=50;
+            selectedBalloon.remove(); b.remove();
+            balloons = balloons.filter(x=>x!==selectedBalloon && x!==b);
+        } else { score-=5; }
+        selectedBalloon.classList.remove('selected');
+        selectedBalloon=null;
+    } else {
+        if(selectedBalloon) selectedBalloon.classList.remove('selected');
+        selectedBalloon=b;
+        b.classList.add('selected'); // siyah çerçeve burada eklendi
+    }
+}
+
+function startGame() {
+    if(gameStarted) return;
+    gameStarted=true;
+    uiPanel.style.display='none';
+    createBalloons();
+    moveBalloons();
+    timerInterval=setInterval(()=>{ 
+        timeLeft--; 
+        document.getElementById('timer')?.remove();
+        let tdiv=document.createElement('div'); 
+        tdiv.id='timer';
+        tdiv.style.position='absolute'; tdiv.style.top='50%'; tdiv.style.left='50%';
+        tdiv.style.transform='translate(-50%,-50%)';
+        tdiv.style.fontSize='3em';
+        tdiv.style.color='black';
+        tdiv.style.fontWeight='bold';
+        tdiv.innerText=`⏱ ${timeLeft}s`;
+        container.appendChild(tdiv);
+        if(timeLeft<=0 || balloons.length===0) endGame();
+    },1000);
+}
+
+function endGame() {
+    clearInterval(timerInterval);
+    document.querySelectorAll('.balloon').forEach(b=>b.remove());
+    endPanel.style.display='block';
+    scoreText.innerText='Toplam Puanın: '+score;
+}
+
+function passMove() {
+    if(passCount>=maxPass || balloons.length<2) return;
+    passCount++;
+    score-=20;
+    let techB = balloons.find(b=>b.dataset.type==='tech');
+    let matchB = balloons.find(b=>b.dataset.match===techB.dataset.match && b.dataset.type==='impact');
+    if(techB && matchB){
+        techB.remove(); matchB.remove();
+        balloons = balloons.filter(x=>x!==techB && x!==matchB);
+    }
+}
+
+function useCrystal() {
+    if(crystalUsed) return;
+    crystalUsed=true;
+    score-=30;
+    timeLeft+=30;
+}
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+
+let passBtn = document.createElement('button');
+passBtn.innerText='Pas Hakkı';
+passBtn.className='actionBtn';
+passBtn.onclick=passMove;
+container.appendChild(passBtn);
+passBtn.style.position='absolute'; passBtn.style.top='10px'; passBtn.style.right='150px';
+
+let crystalBtn = document.createElement('button');
+crystalBtn.innerText='Zaman Kristali';
+crystalBtn.className='actionBtn';
+crystalBtn.onclick=useCrystal;
+container.appendChild(crystalBtn);
+crystalBtn.style.position='absolute'; crystalBtn.style.top='10px'; crystalBtn.style.right='10px';
+</script>
+</body>
+</html>
